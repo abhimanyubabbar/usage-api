@@ -47,3 +47,16 @@ func (processor UsageProcessor) GetLimitsForUser(userId int) (DailyMonthlyLimits
 		Monthly: monthlyLimits,
 	}, nil
 }
+
+func (processor UsageProcessor) GetDataForUser(
+	userId int,
+	count int,
+	resolution string,
+	start string) ([][]interface{}, error) {
+
+	if resolution == "M" {
+		return processor.Storage.GetMonthlyUserData(userId, count, start)
+	}
+
+	return processor.Storage.GetDailyUserData(userId, count, start)
+}

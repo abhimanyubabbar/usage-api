@@ -26,7 +26,7 @@ var schemas = []string{
 	)`,
 	`CREATE TABLE IF NOT EXISTS user (
 		user_id INTEGER PRIMARY KEY,
-		username TEXT NOT NULL,
+		username TEXT NOT NULL UNIQUE,
 		password TEXT NOT NULL
 	)`,
 }
@@ -70,6 +70,29 @@ func NewStorage(location string) (UsageStorage, error) {
 	return UsageStorage{db}, nil
 }
 
+func (storage UsageStorage) AddNewUser(userId int, username string, password string) error {
+
+	q := `INSERT INTO user(user_id, username, password) VALUES (?, ?. ?)`
+	_, err := storage.db.Exec(q, userId, username, password)
+	return err
+}
+
+func (storage UsageStorage) GetUser(username string, password string) (User, error) {
+
+	user := User{}
+
+	q := `SELECT user_id, username, password FROM user WHERE username=? AND password=?`
+	err := storage.db.QueryRow(q, username, password).Scan(&user.UserId,
+		&user.UserName,
+		&user.Password)
+
+	if err != nil {
+		return User{}, err
+	}
+
+	return user, nil
+}
+
 func (storage UsageStorage) GetDailyLimits(userId int) (Limits, error) {
 
 	fmt.Printf("Received request to fetch the daily limits for the user: %d\n", userId)
@@ -93,11 +116,11 @@ func (storage UsageStorage) GetDailyLimits(userId int) (Limits, error) {
 		return Limits{}, err
 	}
 
-	// mmTimestamp.Minimum, _:= time.Parse("2006-01-02 15:04:05", string(timestampMin))
-	// mmTimestamp.Maximum, _:= time.Parse("2006-01-02 15:04:05", string(timestampMax))
+	t, _ := time.Parse("2006-01-02 15:04:05", string(timestampMin))
+	mmTimestamp.Minimum = t.Format("2006-01-02")
 
-	mmTimestamp.Minimum, _ = time.Parse("2006-01-02 15:04:05", string(timestampMin))
-	mmTimestamp.Maximum, _ = time.Parse("2006-01-02 15:04:05", string(timestampMax))
+	t, _ = time.Parse("2006-01-02 15:04:05", string(timestampMax))
+	mmTimestamp.Maximum = t.Format("2006-01-02")
 
 	return Limits{
 		MinMaxTimestamp:   mmTimestamp,
@@ -129,12 +152,81 @@ func (storage UsageStorage) GetMonthlyLimits(userId int) (Limits, error) {
 		return Limits{}, err
 	}
 
-	mmTimestamp.Minimum, _ = time.Parse("2006-01-02 15:04:05", string(timestampMin))
-	mmTimestamp.Maximum, _ = time.Parse("2006-01-02 15:04:05", string(timestampMax))
+	t, _ := time.Parse("2006-01-02 15:04:05", string(timestampMin))
+	mmTimestamp.Minimum = t.Format("2006-01-02")
+
+	t, _ = time.Parse("2006-01-02 15:04:05", string(timestampMax))
+	mmTimestamp.Maximum = t.Format("2006-01-02")
 
 	return Limits{
 		MinMaxTimestamp:   mmTimestamp,
 		MinMaxConsumption: mmConsumption,
 		MinMaxTemperature: mmTemperature,
 	}, nil
+}
+
+func (storage UsageStorage) GetMonthlyUserData(userId int, count int, start string) ([][]interface{}, error) {
+
+	var response [][]interface{}
+
+	q := `SELECT timestamp, temperature, consumption from months WHERE user_id = ? and timestamp >= ? LIMIT ?`
+	rows, err := storage.db.Query(q, userId, start, count)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+
+		var temperature, consumption int
+		var timestamp []byte
+
+		if err := rows.Scan(&timestamp, &temperature, &consumption); err != nil {
+			return nil, err
+		}
+
+		t, _ := time.Parse("2006-01-02 15:04:05", string(timestamp))
+
+		response = append(response, []interface{}{
+			t.Format("2006-01-02"),
+			temperature,
+			consumption,
+		})
+	}
+
+	return response, err
+}
+
+func (storage UsageStorage) GetDailyUserData(userId int, count int, start string) ([][]interface{}, error) {
+
+	var response [][]interface{}
+
+	q := `SELECT timestamp, temperature, consumption from days WHERE user_id = ? and timestamp >= ? LIMIT ?`
+	rows, err := storage.db.Query(q, userId, start, count)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+
+		var temperature, consumption int
+		var timestamp []byte
+
+		if err := rows.Scan(&timestamp, &temperature, &consumption); err != nil {
+			return nil, err
+		}
+
+		t, _ := time.Parse("2006-01-02 15:04:05", string(timestamp))
+
+		response = append(response, []interface{}{
+			t.Format("2006-01-02"),
+			temperature,
+			consumption,
+		})
+	}
+
+	return response, err
 }

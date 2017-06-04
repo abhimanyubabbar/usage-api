@@ -1,10 +1,20 @@
 package usage
 
-import "time"
+type User struct {
+	UserId   int    `db:"user_id"`
+	UserName string `db:"username"`
+	Password string `db:"password"`
+}
+
+type UserData struct {
+	Timestamp   string `json:"timestamp"`
+	Temperature int    `json:"temperature"`
+	Consumption int    `json:"consumption"`
+}
 
 type MinMaxTimestamp struct {
-	Minimum time.Time `json:"minimum"`
-	Maximum time.Time `json:"maximum"`
+	Minimum string `json:"minimum"`
+	Maximum string `json:"maximum"`
 }
 
 type MinMaxConsumption struct {

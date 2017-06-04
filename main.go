@@ -4,12 +4,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/babbarshaer/usage-api/usage"
 )
 
 type Router struct {
 	processor usage.UsageProcessor
+}
+
+func (router Router) authenticateUser(r *http.Request) (usage.User, error) {
+
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		return usage.User{}, fmt.Errorf("Unable to extract authentication information")
+	}
+
+	user, err := router.processor.Storage.GetUser(username, password)
+	if err != nil {
+		return usage.User{}, fmt.Errorf("Unable to locate the user")
+	}
+
+	return user, nil
 }
 
 func (router Router) pingHandler(rw http.ResponseWriter, r *http.Request) {
@@ -19,7 +37,17 @@ func (router Router) pingHandler(rw http.ResponseWriter, r *http.Request) {
 func (router Router) getUsageLimitsHandler(rw http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("Received a request to fetch the usage for the customer")
-	limits, err := router.processor.GetLimitsForUser(1)
+
+	user, err := router.authenticateUser(r)
+	if err != nil {
+		fmt.Println(err)
+		rw.Header().Set("WWW-Authenticate", `Basic realm="Usage"`)
+		rw.WriteHeader(401)
+		rw.Write([]byte("401 Unauthorized\n"))
+		return
+	}
+
+	limits, err := router.processor.GetLimitsForUser(user.UserId)
 
 	if err != nil {
 
@@ -29,6 +57,73 @@ func (router Router) getUsageLimitsHandler(rw http.ResponseWriter, r *http.Reque
 	}
 
 	byt, _ := json.Marshal(limits)
+	rw.Write(byt)
+}
+
+func (router Router) getDataHandler(rw http.ResponseWriter, r *http.Request) {
+
+	fmt.Println("Received a request to fetch data for the user")
+
+	user, err := router.authenticateUser(r)
+	if err != nil {
+		rw.Header().Set("WWW-Authenticate", `Basic realm="Usage"`)
+		rw.WriteHeader(401)
+		rw.Write([]byte("401 Unauthorized\n"))
+		return
+	}
+
+	values := r.URL.Query()
+
+	fmt.Printf("%v\n", values)
+
+	if len(values["resolution"]) == 0 || len(values["count"]) == 0 || len(values["start"]) == 0 {
+		rw.WriteHeader(400)
+		rw.Write([]byte(`{"error": {"code": 400, "reason": "Missing mandatory query params"}}`))
+		return
+	}
+
+	badRequest := false
+
+	if strings.TrimSpace(values["resolution"][0]) != "M" && strings.TrimSpace(values["resolution"][0]) != "D" {
+		badRequest = true
+	}
+
+	if _, err := time.Parse("2006-01-02", strings.TrimSpace(values["start"][0])); err != nil {
+		fmt.Println("Failed start")
+		badRequest = true
+	}
+
+	if val, err := strconv.Atoi(strings.TrimSpace(values["count"][0])); err != nil || val <= 0 {
+		fmt.Println("Failed count")
+		badRequest = true
+	}
+
+	if badRequest {
+		rw.WriteHeader(400)
+		rw.Write([]byte(`{"error": {"code": 400, "reason": "Bad Request"}}`))
+		return
+	}
+
+	count, _ := strconv.Atoi(strings.TrimSpace(values["count"][0]))
+	resolution := strings.TrimSpace(values["resolution"][0])
+	start := strings.TrimSpace(values["start"][0])
+
+	payload, err := router.processor.GetDataForUser(user.UserId, count, resolution, start)
+	if err != nil {
+
+		fmt.Println(err)
+		rw.WriteHeader(500)
+		rw.Write([]byte(`{"error": {"code": 500, "reason": {"Internal Server Error"}}`))
+		return
+	}
+
+	response := struct {
+		Data [][]interface{} `json:"data"`
+	}{
+		Data: payload,
+	}
+
+	byt, _ := json.Marshal(response)
 	rw.Write(byt)
 }
 
@@ -53,6 +148,7 @@ func main() {
 
 	http.HandleFunc("/ping", router.pingHandler)
 	http.HandleFunc("/limits", router.getUsageLimitsHandler)
+	http.HandleFunc("/data", router.getDataHandler)
 
 	err = http.ListenAndServeTLS(":8081", "./cert/cert.pem", "cert/key.pem", nil)
 	if err != nil {
