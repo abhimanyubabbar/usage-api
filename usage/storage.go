@@ -10,29 +10,31 @@ import (
 
 var schemas = []string{
 
+	`CREATE TABLE IF NOT EXISTS user (
+		user_id INTEGER PRIMARY KEY,
+		username TEXT NOT NULL UNIQUE,
+		password TEXT NOT NULL
+	)`,
 	`CREATE TABLE IF NOT EXISTS days (
 		day_id INTEGER PRIMARY KEY,
 		user_id INTEGER NOT NULL,
 		timestamp TEXT NOT NULL,
 		consumption INTEGER NOT NULL,
-		temperature INTEGER NOT NULL
+		temperature INTEGER NOT NULL,
+		FOREIGN KEY(user_id) REFERENCES user(user_id) ON DELETE CASCADE
 	)`,
 	`CREATE TABLE IF NOT EXISTS months (
 		month_id INTEGER PRIMARY KEY,
 		user_id INTEGER NOT NULL,
 		timestamp TEXT NOT NULL,
 		consumption INTEGER NOT NULL,
-		temperature INTEGER NOT NULL
-	)`,
-	`CREATE TABLE IF NOT EXISTS user (
-		user_id INTEGER PRIMARY KEY,
-		username TEXT NOT NULL UNIQUE,
-		password TEXT NOT NULL
+		temperature INTEGER NOT NULL,
+		FOREIGN KEY(user_id) REFERENCES user(user_id) ON DELETE CASCADE
 	)`,
 }
 
 type UsageStorage struct {
-	db *sql.DB
+	DB *sql.DB
 }
 
 func connectToDB(location string) (*sql.DB, error) {
@@ -72,8 +74,8 @@ func NewStorage(location string) (UsageStorage, error) {
 
 func (storage UsageStorage) AddNewUser(userId int, username string, password string) error {
 
-	q := `INSERT INTO user(user_id, username, password) VALUES (?, ?. ?)`
-	_, err := storage.db.Exec(q, userId, username, password)
+	q := `INSERT INTO user(user_id, username, password) VALUES (?, ?, ?)`
+	_, err := storage.DB.Exec(q, userId, username, password)
 	return err
 }
 
@@ -82,7 +84,7 @@ func (storage UsageStorage) GetUser(username string, password string) (User, err
 	user := User{}
 
 	q := `SELECT user_id, username, password FROM user WHERE username=? AND password=?`
-	err := storage.db.QueryRow(q, username, password).Scan(&user.UserId,
+	err := storage.DB.QueryRow(q, username, password).Scan(&user.UserId,
 		&user.UserName,
 		&user.Password)
 
@@ -93,13 +95,29 @@ func (storage UsageStorage) GetUser(username string, password string) (User, err
 	return user, nil
 }
 
+func (storage UsageStorage) AddDailyLimit(userId, dayId, temperature, consumption int, timestamp string) error {
+
+	q := `INSERT INTO days (user_id, day_id, timestamp, consumption, temperature) VALUES (?, ?, ?, ?, ?)`
+
+	_, err := storage.DB.Exec(q, userId, dayId, timestamp, consumption, temperature)
+	return err
+}
+
+func (storage UsageStorage) AddMonthlyLimit(userId, monthId, temperature, consumption int, timestamp string) error {
+
+	q := `INSERT INTO months (user_id, month_id, timestamp, consumption, temperature) VALUES (?, ?, ?, ?, ?)`
+
+	_, err := storage.DB.Exec(q, userId, monthId, timestamp, consumption, temperature)
+	return err
+}
+
 func (storage UsageStorage) GetDailyLimits(userId int) (Limits, error) {
 
 	fmt.Printf("Received request to fetch the daily limits for the user: %d\n", userId)
 
-	q := `SELECT min(timestamp), max(timestamp), 
-	min(consumption), max(consumption), 
-	min(temperature), max(temperature) from days where user_id = ?`
+	q := `SELECT COALESCE(min(timestamp), "0001-01-01 00:00:00"), COALESCE(max(timestamp), "0001-01-01 00:00:00"),
+	COALESCE(min(consumption), 0), COALESCE(max(consumption), 0),
+	COALESCE(min(temperature), 0), COALESCE(max(temperature), 0) from days where user_id = ?`
 
 	mmTimestamp := MinMaxTimestamp{}
 	mmConsumption := MinMaxConsumption{}
@@ -108,7 +126,7 @@ func (storage UsageStorage) GetDailyLimits(userId int) (Limits, error) {
 	var timestampMin []byte
 	var timestampMax []byte
 
-	err := storage.db.QueryRow(q, userId).Scan(&timestampMin, &timestampMax,
+	err := storage.DB.QueryRow(q, userId).Scan(&timestampMin, &timestampMax,
 		&mmConsumption.Minimum, &mmConsumption.Maximum,
 		&mmTemperature.Minimum, &mmTemperature.Maximum)
 
@@ -133,9 +151,9 @@ func (storage UsageStorage) GetMonthlyLimits(userId int) (Limits, error) {
 
 	fmt.Printf("Received request to fetch monthly limits for the user: %d\n", userId)
 
-	q := `SELECT min(timestamp), max(timestamp), 
-	min(consumption), max(consumption), 
-	min(temperature), max(temperature) from months where user_id = ?`
+	q := `SELECT COALESCE(min(timestamp), "0001-01-01 00:00:00"), COALESCE(max(timestamp), "0001-01-01 00:00:00"),
+	COALESCE(min(consumption), 0), COALESCE(max(consumption), 0),
+	COALESCE(min(temperature), 0), COALESCE(max(temperature), 0) from months where user_id = ?`
 
 	mmTimestamp := MinMaxTimestamp{}
 	mmConsumption := MinMaxConsumption{}
@@ -144,7 +162,7 @@ func (storage UsageStorage) GetMonthlyLimits(userId int) (Limits, error) {
 	var timestampMin []byte
 	var timestampMax []byte
 
-	err := storage.db.QueryRow(q, userId).Scan(&timestampMin, &timestampMax,
+	err := storage.DB.QueryRow(q, userId).Scan(&timestampMin, &timestampMax,
 		&mmConsumption.Minimum, &mmConsumption.Maximum,
 		&mmTemperature.Minimum, &mmTemperature.Maximum)
 
@@ -170,7 +188,7 @@ func (storage UsageStorage) GetMonthlyUserData(userId int, count int, start stri
 	var response [][]interface{}
 
 	q := `SELECT timestamp, temperature, consumption from months WHERE user_id = ? and timestamp >= ? LIMIT ?`
-	rows, err := storage.db.Query(q, userId, start, count)
+	rows, err := storage.DB.Query(q, userId, start, count)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +221,7 @@ func (storage UsageStorage) GetDailyUserData(userId int, count int, start string
 	var response [][]interface{}
 
 	q := `SELECT timestamp, temperature, consumption from days WHERE user_id = ? and timestamp >= ? LIMIT ?`
-	rows, err := storage.db.Query(q, userId, start, count)
+	rows, err := storage.DB.Query(q, userId, start, count)
 	if err != nil {
 		return nil, err
 	}

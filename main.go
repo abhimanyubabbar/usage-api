@@ -74,8 +74,6 @@ func (router Router) getDataHandler(rw http.ResponseWriter, r *http.Request) {
 
 	values := r.URL.Query()
 
-	fmt.Printf("%v\n", values)
-
 	if len(values["resolution"]) == 0 || len(values["count"]) == 0 || len(values["start"]) == 0 {
 		rw.WriteHeader(400)
 		rw.Write([]byte(`{"error": {"code": 400, "reason": "Missing mandatory query params"}}`))
@@ -134,7 +132,7 @@ func main() {
 	// Stage1: Setup the configuration
 	// parameters to be used by the processor while setting up.
 	config := usage.Config{
-		DBLocation: "./usage/resource/test_data_2017_02_24.db?parseTime=True",
+		DBLocation: "./usage/resource/usage_prod.db",
 	}
 
 	// Stage2: Set up the processor which will be used
