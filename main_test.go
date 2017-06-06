@@ -283,6 +283,7 @@ func TestGetDataForAuthorizedUser(t *testing.T) {
 		[]interface{}{3, 20, 89, "2014-02-07 12:02:13"},
 	}
 
+	// DATA FORMAT : (day_id, temperature, consumption, timestamp)
 	monthlyTestData := [][]interface{}{
 		[]interface{}{1, -1, 10, "2014-02-05 12:02:13"},
 		[]interface{}{2, -10, 100, "2014-03-05 12:02:13"},

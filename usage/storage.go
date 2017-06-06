@@ -20,16 +20,14 @@ var schemas = []string{
 		user_id INTEGER NOT NULL,
 		timestamp TEXT NOT NULL,
 		consumption INTEGER NOT NULL,
-		temperature INTEGER NOT NULL,
-		FOREIGN KEY(user_id) REFERENCES user(user_id) ON DELETE CASCADE
+		temperature INTEGER NOT NULL
 	)`,
 	`CREATE TABLE IF NOT EXISTS months (
 		month_id INTEGER PRIMARY KEY,
 		user_id INTEGER NOT NULL,
 		timestamp TEXT NOT NULL,
 		consumption INTEGER NOT NULL,
-		temperature INTEGER NOT NULL,
-		FOREIGN KEY(user_id) REFERENCES user(user_id) ON DELETE CASCADE
+		temperature INTEGER NOT NULL
 	)`,
 }
 
@@ -37,6 +35,8 @@ type UsageStorage struct {
 	DB *sql.DB
 }
 
+// connectToDB opens up a connection to the database and pings
+// the database.
 func connectToDB(location string) (*sql.DB, error) {
 
 	db, err := sql.Open("sqlite3", location)
@@ -95,7 +95,12 @@ func (storage UsageStorage) GetUser(username string, password string) (User, err
 	return user, nil
 }
 
-func (storage UsageStorage) AddDailyLimit(userId, dayId, temperature, consumption int, timestamp string) error {
+func (storage UsageStorage) AddDailyLimit(
+	userId,
+	dayId,
+	temperature,
+	consumption int,
+	timestamp string) error {
 
 	q := `INSERT INTO days (user_id, day_id, timestamp, consumption, temperature) VALUES (?, ?, ?, ?, ?)`
 
@@ -103,7 +108,12 @@ func (storage UsageStorage) AddDailyLimit(userId, dayId, temperature, consumptio
 	return err
 }
 
-func (storage UsageStorage) AddMonthlyLimit(userId, monthId, temperature, consumption int, timestamp string) error {
+func (storage UsageStorage) AddMonthlyLimit(
+	userId,
+	monthId,
+	temperature,
+	consumption int,
+	timestamp string) error {
 
 	q := `INSERT INTO months (user_id, month_id, timestamp, consumption, temperature) VALUES (?, ?, ?, ?, ?)`
 
@@ -183,7 +193,10 @@ func (storage UsageStorage) GetMonthlyLimits(userId int) (Limits, error) {
 	}, nil
 }
 
-func (storage UsageStorage) GetMonthlyUserData(userId int, count int, start string) ([][]interface{}, error) {
+func (storage UsageStorage) GetMonthlyUserData(
+	userId int,
+	count int,
+	start string) ([][]interface{}, error) {
 
 	var response [][]interface{}
 
@@ -216,7 +229,10 @@ func (storage UsageStorage) GetMonthlyUserData(userId int, count int, start stri
 	return response, err
 }
 
-func (storage UsageStorage) GetDailyUserData(userId int, count int, start string) ([][]interface{}, error) {
+func (storage UsageStorage) GetDailyUserData(
+	userId int,
+	count int,
+	start string) ([][]interface{}, error) {
 
 	var response [][]interface{}
 

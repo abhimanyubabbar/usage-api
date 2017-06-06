@@ -48,6 +48,8 @@ func (processor UsageProcessor) GetLimitsForUser(userId int) (DailyMonthlyLimits
 	}, nil
 }
 
+// GetDataForUser fetches the temperature, consumption data for the user
+// based on the starting date provided.
 func (processor UsageProcessor) GetDataForUser(
 	userId int,
 	count int,

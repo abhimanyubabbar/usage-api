@@ -130,13 +130,13 @@ func main() {
 	fmt.Println("Starting with the TLS server")
 
 	// Stage1: Setup the configuration
-	// parameters to be used by the processor while setting up.
+	// parameters to be used by the processor.
 	config := usage.Config{
 		DBLocation: "./usage/resource/usage_prod.db",
 	}
 
 	// Stage2: Set up the processor which will be used
-	// by the router when invoking the correct functions.
+	// by the router which invokes the handler functions for the endpoints.
 	processor, err := usage.NewProcessor(config)
 	if err != nil {
 		panic(err)
@@ -148,6 +148,7 @@ func main() {
 	http.HandleFunc("/limits", router.getUsageLimitsHandler)
 	http.HandleFunc("/data", router.getDataHandler)
 
+	// Stage3: Bootup the TLS Server.
 	err = http.ListenAndServeTLS(":8081", "./cert/cert.pem", "cert/key.pem", nil)
 	if err != nil {
 		panic(err)
